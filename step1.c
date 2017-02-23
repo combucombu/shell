@@ -26,22 +26,21 @@ int main()
 	while (1) {
 		int ac;
 		int pNum;
-		//配列の初期化
-		for (i = 0; i < MAXCMDLEN; i++) {
+		for (i = 0; i < BUFLEN; i++) {
 			cmd[i] = '\0';
 		}
-		//プロンプトの表示
 		fprintf(stdout, "mysh$ ");
-		//コマンドの取得
 		getCmd(cmd);
 		fprintf(stdout, "%s\n", cmd);
 		ac = splitCmd(cmd, av);
 		for (i = 0; i < ac; i++) {
 			fprintf(stdout, "%d %s\n", i, av[i]);
 		}
+		if (strcmp(av[0], "exit") == 0) {
+			exit(0);
+		}
 		fprintf(stdout, "\n");
 		pNum = countPipe(ac, av) + 1;
-		//コマンドの実行
 		fprintf(stdout, "///////////////////////launch\n");
 		sh_launch(av, pNum);	
 		fprintf(stdout, "///////////////////////finish\n");
@@ -143,16 +142,27 @@ int sh_launch(char* av[], int pNum)
 	int status;
 	pid_t pid;
 	char* pav[MAXSPLIT];
-	pid = fork();
-	
-	if (pid == 0) {
-		splitProc(av, pav, 0);
-		execvp(pav[0], pav);
-	} else if (pid != 1) {
-		wait(&status);
+
+	if (strcmp(av[0], "cd") == 0) {
+		int return_code = 0;
+		if (chdir(av[1]) == 0) {
+			fprintf(stdout, "directory changed\n");
+		} else {
+			fprintf(stderr, "directory not changed !!!\n");
+			return_code = 1;
+		}
+		return return_code;
 	} else {
-		fprintf(stderr, "Error");
-		exit(1);
+		pid = fork();
+		if (pid == 0) {
+			splitProc(av, pav, 0);
+			execvp(pav[0], pav);
+		} else if (pid != 1) {
+			wait(&status);
+		} else {
+			fprintf(stderr, "Error");
+			exit(1);
+		}
 	}
 
 	return 0;
