@@ -1,8 +1,0 @@
-total 56
-drwxr-xr-x   7 combu  staff    238  2 24 18:32 .
-drwxr-xr-x   3 combu  staff    102  2 17 13:16 ..
-drwxr-xr-x  12 combu  staff    408  2 24 18:28 .git
--rwxr-xr-x   1 combu  staff  13536  2 24 18:15 a.out
--rw-r--r--   1 combu  staff      0  2 24 18:32 hoge
--rw-r--r--@  1 combu  staff   5237  2 24 18:15 mysh.c
--rw-r--r--   1 combu  staff     25  2 24 18:16 wc

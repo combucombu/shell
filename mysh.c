@@ -251,7 +251,6 @@ int sh_launch(char* av[], int pNum)
 		wait(&status);wait(&status);
 	} else if (pNum > 2) {
 		int i;
-		int stat[pNum];
 		int pfd[pNum - 1][2];
 
 		fprintf(stderr, "pNum = %d\n", pNum);
@@ -266,24 +265,29 @@ int sh_launch(char* av[], int pNum)
 			execvp(pav[0], pav);
 		} else if (pid == -1) {
 		} else {
-			wait(&stat[0]);
+			wait(&status);
 		}
 		//middle processes
 		for (i = 1; i < pNum - 1; i++) {
 			pipe(pfd[i]);
 			if ((pid = fork()) == 0) {
+				//close stdin & dup 
 				close(0);
 				dup(pfd[i - 1][0]);
+				//close stdout & dup
 				close(1);
 				dup(pfd[i][1]);
+				//close pipes
 				close(pfd[i][0]);
 				close(pfd[i][1]);
 				close(pfd[i - 1][0]);
 				close(pfd[i - 1][1]);
+				pac = splitProc(av, pav, i);
+				execv(pav[0], pav);
 			} else if (pid == -1) {
 			} else {
 				close(pfd[i -1][0]);close(pfd[i - 1][1]);
-				wait(&stat[i]);
+				wait(&status);
 			}
 		}
 
@@ -298,7 +302,7 @@ int sh_launch(char* av[], int pNum)
 		} else if (pid == -1) {
 		} else {
 			close(pfd[pNum - 2][0]); close(pfd[pNum - 2][1]);
-			wait(&stat[pNum - 1]);
+			wait(&status);
 		}
 	}
 	return 0;
