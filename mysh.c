@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#include <signal.h>
 
 #define BUFLEN 512
 #define MAXCMDLEN 256
@@ -16,12 +17,14 @@ int countPipe(int ac, char* av[]);
 int getCmd(char* cmd);
 int sh_launch(char* av[], int pNum);
 int removeRedirect(char* pav[], char* rav[]);
+
 int main()
 {
 	int i;
 	int k;
 	char cmd[BUFLEN];
 	char *av[MAXSPLIT];
+
 	while (1) {
 		int ac;
 		int pNum;
@@ -172,22 +175,25 @@ int sh_launch(char* av[], int pNum)
 	} else if (pNum == 1) {
 		if ((pid = fork()) == 0) {
 			pac = splitProc(av, pav, 0);
-			for (i = 0; i < pac; i++) {
-				if (*pav[i] == '>') {
-					fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
-					close(1);
-					dup(fd);
-					close(fd);
-					removeRedirect(pav, rav);
-					execvp(rav[0], rav);
-					break;
-				}
-				if (i == pac - 1) {	
-					fprintf(stderr, "test\n");
-					execvp(pav[0], pav);
-					break;
-				}
-			}
+            for (i = 0; i < pac; i++) {
+                if (*pav[i] == '>' || *pav[i] == '<') {
+                    fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+					if (*pav[i] == '>') {
+						close(1);
+					} else if (*pav[i] == '<') {
+						close(0);
+					}
+                    dup(fd);
+                    close(fd);
+                    removeRedirect(pav, rav);
+                    execvp(rav[0], rav);
+                    break;
+                }
+                if (i == pac - 1) {	
+                    execvp(pav[0], pav);
+                    break;
+                }
+            }
 			fprintf(stderr, "close\n");
 		} else if (pid < 0){
 			fprintf(stderr, "Error");
@@ -200,15 +206,18 @@ int sh_launch(char* av[], int pNum)
 		pipe(pfd);
 
 		if (fork() == 0) {
-			fprintf(stderr, "fork1\n");
 			close(1);
 			dup(pfd[1]);
 			close(pfd[0]);close(pfd[1]);
 			pac = splitProc(av, pav, 0);
             for (i = 0; i < pac; i++) {
-                if (*pav[i] == '>') {
+                if (*pav[i] == '>' || *pav[i] == '<') {
                     fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
-                    close(1);
+					if (*pav[i] == '>') {
+						close(1);
+					} else if (*pav[i] == '<') {
+						close(0);
+					}
                     dup(fd);
                     close(fd);
                     removeRedirect(pav, rav);
@@ -216,23 +225,24 @@ int sh_launch(char* av[], int pNum)
                     break;
                 }
                 if (i == pac - 1) {	
-                    fprintf(stderr, "test\n");
                     execvp(pav[0], pav);
                     break;
                 }
             }
-			execvp(pav[0], pav);
 		}
 		if (fork() == 0) {
-			fprintf(stderr, "fork2\n");
 			close(0);
 			dup(pfd[0]);
 			close(pfd[0]);close(pfd[1]);
 			pac = splitProc(av, pav, 1);
             for (i = 0; i < pac; i++) {
-                if (*pav[i] == '>') {
+                if (*pav[i] == '>' || *pav[i] == '<') {
                     fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
-                    close(1);
+					if (*pav[i] == '>') {
+						close(1);
+					} else if (*pav[i] == '<') {
+						close(0);
+					}
                     dup(fd);
                     close(fd);
                     removeRedirect(pav, rav);
@@ -240,69 +250,117 @@ int sh_launch(char* av[], int pNum)
                     break;
                 }
                 if (i == pac - 1) {	
-                    fprintf(stderr, "test\n");
                     execvp(pav[0], pav);
                     break;
                 }
             }
-			execvp(pav[0], pav);
 		}
 		close(pfd[0]);close(pfd[1]);
 		wait(&status);wait(&status);
 	} else if (pNum > 2) {
-		int i;
-		int pfd[pNum - 1][2];
+		int i, j;
+		int pfd[pNum - 2][2];
+		j = 0;
+		int stat[pNum];
 
 		fprintf(stderr, "pNum = %d\n", pNum);
-		//head process
+
 		pipe(pfd[0]);
-		if ((pid = fork()) == 0) {
+		if (fork() == 0) {
 			close(1);
 			dup(pfd[0][1]);
 			close(pfd[0][0]);
 			close(pfd[0][1]);
 			pac = splitProc(av, pav, 0);
-			execvp(pav[0], pav);
-		} else if (pid == -1) {
-		} else {
-			wait(&status);
+            for (i = 0; i < pac; i++) {
+                if (*pav[i] == '>' || *pav[i] == '<') {
+                    fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+					if (*pav[i] == '>') {
+						close(1);
+					} else if (*pav[i] == '<') {
+						close(0);
+					}
+                    dup(fd);
+                    close(fd);
+                    removeRedirect(pav, rav);
+                    execvp(rav[0], rav);
+                    break;
+                }
+                if (i == pac - 1) {	
+                    execvp(pav[0], pav);
+                    break;
+                }
+            }
 		}
-		//middle processes
-		for (i = 1; i < pNum - 1; i++) {
+
+		for (i = 1; i < pNum -1; i++) {
 			pipe(pfd[i]);
-			if ((pid = fork()) == 0) {
-				//close stdin & dup 
+			if (fork() == 0) {
 				close(0);
 				dup(pfd[i - 1][0]);
-				//close stdout & dup
 				close(1);
 				dup(pfd[i][1]);
-				//close pipes
 				close(pfd[i][0]);
 				close(pfd[i][1]);
 				close(pfd[i - 1][0]);
 				close(pfd[i - 1][1]);
 				pac = splitProc(av, pav, i);
-				execv(pav[0], pav);
-			} else if (pid == -1) {
-			} else {
-				close(pfd[i -1][0]);close(pfd[i - 1][1]);
-				wait(&status);
+				for (i = 0; i < pac; i++) {
+					if (*pav[i] == '>' || *pav[i] == '<') {
+						fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+						if (*pav[i] == '>') {
+							close(1);
+						} else if (*pav[i] == '<') {
+							close(0);
+						}
+						dup(fd);
+						close(fd);
+						removeRedirect(pav, rav);
+						execvp(rav[0], rav);
+						break;
+					}
+					if (i == pac - 1) {	
+						execvp(pav[0], pav);
+						break;
+					}
+				}
 			}
+			close(pfd[i - 1][0]); close(pfd[i - 1][1]);
+		}
+		i--;
+
+		if (fork() == 0) {
+			close(0);
+			dup(pfd[i][0]);
+			close(pfd[i][0]);
+			close(pfd[i][1]);
+			pac = splitProc(av, pav, pNum - 1);
+            for (i = 0; i < pac; i++) {
+                if (*pav[i] == '>' || *pav[i] == '<') {
+                    fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+					if (*pav[i] == '>') {
+						close(1);
+					} else if (*pav[i] == '<') {
+						close(0);
+					}
+                    dup(fd);
+                    close(fd);
+                    removeRedirect(pav, rav);
+                    execvp(rav[0], rav);
+                    break;
+                }
+                if (i == pac - 1) {	
+                    execvp(pav[0], pav);
+                    break;
+                }
+            }
 		}
 
-		//tail process
-		if ((pid = fork()) == 0) {
-			close(0);
-			dup(pfd[pNum - 2][0]);
-			close(pfd[pNum - 2][0]);
-			close(pfd[pNum - 2][1]);
-			pac = splitProc(av, pav, pNum - 1);
-			execvp(pav[0], pav);
-		} else if (pid == -1) {
-		} else {
-			close(pfd[pNum - 2][0]); close(pfd[pNum - 2][1]);
-			wait(&status);
+		close(pfd[i][0]);
+		close(pfd[i][1]);
+
+		for (i = 0; i < pNum; i++) {
+			wait(&stat[i]);
 		}
 	}
 	return 0;
