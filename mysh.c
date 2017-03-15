@@ -18,6 +18,8 @@ int getCmd(char* cmd);
 int sh_launch(char* av[], int pNum);
 int removeRedirect(char* pav[], char* rav[]);
 
+int bg = 0;
+
 int main()
 {
 	int i;
@@ -32,8 +34,10 @@ int main()
 			cmd[i] = '\0';
 		}
 		fprintf(stdout, "mysh$ ");
-		if (getCmd(cmd) < 1) {
-			continue;
+		for (;;) {
+			if (getCmd(cmd) > 1) {
+				break;
+			}
 		}
 		//fprintf(stdout, "%s\n", cmd);
 		ac = splitCmd(cmd, av);
@@ -47,9 +51,9 @@ int main()
 		}
 		//fprintf(stdout, "\n");
 		pNum = countPipe(ac, av) + 1;
-		fprintf(stdout, "///////////////////////launch\n");
+		//fprintf(stdout, "///////////////////////launch\n");
 		sh_launch(av, pNum);	
-		fprintf(stdout, "///////////////////////finish\n");
+		//fprintf(stdout, "///////////////////////finish\n");
 	}
 }
 
@@ -74,9 +78,9 @@ int getCmd(char* cmd)
 				cmd[k++] = '|';
 				cmd[k] = ' ';
 			} else if (c == '&') {
-				cmd[k++] = ' ';
-				cmd[k++] = '&';
-				cmd[k] = ' ';
+				cmd[k] = '\0';
+				bg++;
+				return i;
 			} else {
 				cmd[k] = c;
 			}
@@ -121,12 +125,14 @@ int splitProc(char *av[], char *pav[], int pNum)
 			break;
 		}
 		pav[i] = av[j];
-		fprintf(stderr, "pav[%d] = %s\n", i, pav[i]);
+		//fprintf(stderr, "pav[%d] = %s\n", i, pav[i]);
 	}
 	pav[i] = NULL;
+	/*
 	fprintf(stderr, "%s\n", pav[i]);
 
 	fprintf(stderr, "\n");
+	*/
 	return i;
 } 
 int removeRedirect(char* pav[], char* rav[])
@@ -165,7 +171,7 @@ int sh_launch(char* av[], int pNum)
 	char* pav[MAXSPLIT];
 	char* rav[MAXSPLIT];
 
-	fprintf(stdout, "pNum = %d\n", pNum);
+	//fprintf(stdout, "pNum = %d\n", pNum);
 	if (strcmp(av[0], "cd") == 0) {
 		int return_code = 0;
 		if (chdir(av[1]) == 0) {
@@ -202,7 +208,11 @@ int sh_launch(char* av[], int pNum)
 			fprintf(stderr, "Error");
 			exit(1);
 		} else {
-			wait(&status);
+			if (bg > 0) {
+				bg = 0;
+			} else {
+				wait(&status);
+			}
 		}
 	} else if (pNum == 2) {
 		int pfd[2];
@@ -259,7 +269,11 @@ int sh_launch(char* av[], int pNum)
             }
 		}
 		close(pfd[0]);close(pfd[1]);
-		wait(&status);wait(&status);
+		if (bg > 0) {
+			bg = 0;
+		} else {
+			wait(&status);wait(&status);
+		}
 	} else if (pNum > 2) {
 		int i, j;
 		int pfd[pNum - 2][2];
