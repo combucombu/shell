@@ -17,6 +17,7 @@ int countPipe(int ac, char* av[]);
 int getCmd(char* cmd);
 int sh_launch(char* av[], int pNum);
 int removeRedirect(char* pav[], char* rav[]);
+void handler(int sig);
 
 int bg = 0;
 
@@ -26,6 +27,10 @@ int main()
 	int k;
 	char cmd[BUFLEN];
 	char *av[MAXSPLIT];
+	
+	if (signal(SIGINT, handler) == SIG_ERR) {
+		return 1;
+	}
 
 	while (1) {
 		int ac;
@@ -195,11 +200,15 @@ int sh_launch(char* av[], int pNum)
                     dup(fd);
                     close(fd);
                     removeRedirect(pav, rav);
-                    execvp(rav[0], rav);
+                    if (execvp(rav[0], rav) < 0) {
+						return -1;
+					}
                     break;
                 }
                 if (i == pac - 1) {	
-                    execvp(pav[0], pav);
+                    if (execvp(pav[0], pav) < 0) {
+						return -1;
+					}
                     break;
                 }
             }
@@ -234,11 +243,15 @@ int sh_launch(char* av[], int pNum)
                     dup(fd);
                     close(fd);
                     removeRedirect(pav, rav);
-                    execvp(rav[0], rav);
+                    if (execvp(rav[0], rav) < 0) {
+						return -1;
+					}
                     break;
                 }
                 if (i == pac - 1) {	
-                    execvp(pav[0], pav);
+                    if (execvp(pav[0], pav) < 0) {
+						return -1;
+					}
                     break;
                 }
             }
@@ -259,11 +272,15 @@ int sh_launch(char* av[], int pNum)
                     dup(fd);
                     close(fd);
                     removeRedirect(pav, rav);
-                    execvp(rav[0], rav);
+                    if (execvp(rav[0], rav) < 0) {
+						return -1;
+					}
                     break;
                 }
                 if (i == pac - 1) {	
-                    execvp(pav[0], pav);
+                    if (execvp(pav[0], pav) < 0) {
+						return -1;
+					}
                     break;
                 }
             }
@@ -283,6 +300,7 @@ int sh_launch(char* av[], int pNum)
 		fprintf(stderr, "pNum = %d\n", pNum);
 
 		pipe(pfd[0]);
+		//first pocess
 		if (fork() == 0) {
 			close(1);
 			dup(pfd[0][1]);
@@ -300,16 +318,21 @@ int sh_launch(char* av[], int pNum)
                     dup(fd);
                     close(fd);
                     removeRedirect(pav, rav);
-                    execvp(rav[0], rav);
+                    if (execvp(rav[0], rav) < 0) {
+					   return -1;
+					}	   
                     break;
                 }
                 if (i == pac - 1) {	
-                    execvp(pav[0], pav);
+                    if (execvp(pav[0], pav) < 0) {
+						return -1;
+					}
                     break;
                 }
             }
 		}
 
+		//middle process
 		for (i = 1; i < pNum -1; i++) {
 			pipe(pfd[i]);
 			if (fork() == 0) {
@@ -333,11 +356,15 @@ int sh_launch(char* av[], int pNum)
 						dup(fd);
 						close(fd);
 						removeRedirect(pav, rav);
-						execvp(rav[0], rav);
+						if (execvp(rav[0], rav) < 0) {
+							return -1;
+						}
 						break;
 					}
 					if (i == pac - 1) {	
-						execvp(pav[0], pav);
+						if (execvp(pav[0], pav) < 0) {
+							return -1;
+						}
 						break;
 					}
 				}
@@ -346,6 +373,7 @@ int sh_launch(char* av[], int pNum)
 		}
 		i--;
 
+		//last process
 		if (fork() == 0) {
 			close(0);
 			dup(pfd[i][0]);
@@ -363,11 +391,15 @@ int sh_launch(char* av[], int pNum)
                     dup(fd);
                     close(fd);
                     removeRedirect(pav, rav);
-                    execvp(rav[0], rav);
+                    if (execvp(rav[0], rav) < 0) {
+						return -1;
+					}
                     break;
                 }
                 if (i == pac - 1) {	
-                    execvp(pav[0], pav);
+                    if (execvp(pav[0], pav) < 0) {
+						return -1;
+					}
                     break;
                 }
             }
@@ -381,4 +413,9 @@ int sh_launch(char* av[], int pNum)
 		}
 	}
 	return 0;
+}
+
+void handler(int sig)
+{
+	fprintf(stderr, "signal detect\n");
 }
