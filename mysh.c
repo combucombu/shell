@@ -10,6 +10,7 @@
 #define BUFLEN 512
 #define MAXCMDLEN 256
 #define MAXSPLIT 80
+#define PATH_SIZE 256
 
 int splitCmd(char* cmd, char* av[]);
 int splitProc(char* av[], char* pav[], int pNum);
@@ -27,7 +28,7 @@ int main()
 	int k;
 	char cmd[BUFLEN];
 	char *av[MAXSPLIT];
-	
+
 	if (signal(SIGINT, handler) == SIG_ERR) {
 		return 1;
 	}
@@ -35,11 +36,14 @@ int main()
 	while (1) {
 		int ac;
 		int pNum;
+		char path[PATH_SIZE];
 		for (i = 0; i < BUFLEN; i++) {
 			cmd[i] = '\0';
 		}
-		fprintf(stdout, "mysh$ ");
+
 		for (;;) {
+			getcwd(path, PATH_SIZE);
+			fprintf(stdout, "[mysh] %s\n$ ", path);
 			if (getCmd(cmd) > 1) {
 				break;
 			}
@@ -47,10 +51,10 @@ int main()
 		//fprintf(stdout, "%s\n", cmd);
 		ac = splitCmd(cmd, av);
 		/*
-		for (i = 0; i < ac; i++) {
-			fprintf(stdout, "%d %s\n", i, av[i]);
-		}
-		*/
+		   for (i = 0; i < ac; i++) {
+		   fprintf(stdout, "%d %s\n", i, av[i]);
+		   }
+		   */
 		if (strcmp(av[0], "exit") == 0) {
 			exit(0);
 		}
@@ -134,17 +138,17 @@ int splitProc(char *av[], char *pav[], int pNum)
 	}
 	pav[i] = NULL;
 	/*
-	fprintf(stderr, "%s\n", pav[i]);
+	   fprintf(stderr, "%s\n", pav[i]);
 
-	fprintf(stderr, "\n");
-	*/
+	   fprintf(stderr, "\n");
+	   */
 	return i;
 } 
 int removeRedirect(char* pav[], char* rav[])
 {
 	int i;
 	for (i = 0;;i++) {
-		if(*pav[i] == '>') {
+		if(*pav[i] == '>' || *pav[i] == '<') {
 			rav[i] = NULL;
 			break;
 		}
@@ -172,6 +176,7 @@ int sh_launch(char* av[], int pNum)
 	int fd;
 	int pac;
 	int status;
+	char *path;
 	pid_t pid;
 	char* pav[MAXSPLIT];
 	char* rav[MAXSPLIT];
@@ -179,39 +184,54 @@ int sh_launch(char* av[], int pNum)
 	//fprintf(stdout, "pNum = %d\n", pNum);
 	if (strcmp(av[0], "cd") == 0) {
 		int return_code = 0;
-		if (chdir(av[1]) == 0) {
-			fprintf(stdout, "directory changed\n");
-		} else {
-			fprintf(stderr, "directory not changed !!!\n");
-			return_code = 1;
+		pac = splitProc(av, pav, 0);
+		if (pac == 2) {
+			if (chdir(av[1]) == 0) {
+				//fprintf(stdout, "directory changed\n");
+			} else {
+				//fprintf(stderr, "directory not changed !!!\n");
+				return_code = 1;
+			}
+		} else if (pac == 1) {
+			path = getenv("HOME");
+			if (chdir(path) == 0) {
+				//fprintf(stdout, "directory changed\n");
+			} else {
+				//fprintf(stderr, "directory not changed !!!\n");
+				return_code = 1;
+			}
 		}
 		return return_code;
 	} else if (pNum == 1) {
 		if ((pid = fork()) == 0) {
 			pac = splitProc(av, pav, 0);
-            for (i = 0; i < pac; i++) {
-                if (*pav[i] == '>' || *pav[i] == '<') {
-                    fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+			for (i = 0; i < pac; i++) {
+				if (*pav[i] == '>' || *pav[i] == '<') {
+					//fprintf(stderr, "redirect\n");
 					if (*pav[i] == '>') {
+						fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+						//fprintf(stderr, "redirect in\n");
 						close(1);
 					} else if (*pav[i] == '<') {
+						fd = open(pav[i + 1], O_RDONLY|O_CREAT, S_IREAD | S_IWRITE);
+						//fprintf(stderr, "redirect out\n");
 						close(0);
 					}
-                    dup(fd);
-                    close(fd);
-                    removeRedirect(pav, rav);
-                    if (execvp(rav[0], rav) < 0) {
+					dup(fd);
+					close(fd);
+					removeRedirect(pav, rav);
+					if (execvp(rav[0], rav) < 0) {
 						return -1;
 					}
-                    break;
-                }
-                if (i == pac - 1) {	
-                    if (execvp(pav[0], pav) < 0) {
+					break;
+				}
+				if (i == pac - 1) {	
+					if (execvp(pav[0], pav) < 0) {
 						return -1;
 					}
-                    break;
-                }
-            }
+					break;
+				}
+			}
 			fprintf(stderr, "close\n");
 		} else if (pid < 0){
 			fprintf(stderr, "Error");
@@ -232,58 +252,60 @@ int sh_launch(char* av[], int pNum)
 			dup(pfd[1]);
 			close(pfd[0]);close(pfd[1]);
 			pac = splitProc(av, pav, 0);
-            for (i = 0; i < pac; i++) {
-                if (*pav[i] == '>' || *pav[i] == '<') {
-                    fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+			for (i = 0; i < pac; i++) {
+				if (*pav[i] == '>' || *pav[i] == '<') {
 					if (*pav[i] == '>') {
+						fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
 						close(1);
 					} else if (*pav[i] == '<') {
+						fd = open(pav[i + 1], O_RDONLY|O_CREAT, S_IREAD | S_IWRITE);
 						close(0);
 					}
-                    dup(fd);
-                    close(fd);
-                    removeRedirect(pav, rav);
-                    if (execvp(rav[0], rav) < 0) {
+					dup(fd);
+					close(fd);
+					removeRedirect(pav, rav);
+					if (execvp(rav[0], rav) < 0) {
 						return -1;
 					}
-                    break;
-                }
-                if (i == pac - 1) {	
-                    if (execvp(pav[0], pav) < 0) {
+					break;
+				}
+				if (i == pac - 1) {	
+					if (execvp(pav[0], pav) < 0) {
 						return -1;
 					}
-                    break;
-                }
-            }
+					break;
+				}
+			}
 		}
 		if (fork() == 0) {
 			close(0);
 			dup(pfd[0]);
 			close(pfd[0]);close(pfd[1]);
 			pac = splitProc(av, pav, 1);
-            for (i = 0; i < pac; i++) {
-                if (*pav[i] == '>' || *pav[i] == '<') {
-                    fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+			for (i = 0; i < pac; i++) {
+				if (*pav[i] == '>' || *pav[i] == '<') {
 					if (*pav[i] == '>') {
+						fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
 						close(1);
 					} else if (*pav[i] == '<') {
+						fd = open(pav[i + 1], O_RDONLY|O_CREAT, S_IREAD | S_IWRITE);
 						close(0);
 					}
-                    dup(fd);
-                    close(fd);
-                    removeRedirect(pav, rav);
-                    if (execvp(rav[0], rav) < 0) {
+					dup(fd);
+					close(fd);
+					removeRedirect(pav, rav);
+					if (execvp(rav[0], rav) < 0) {
 						return -1;
 					}
-                    break;
-                }
-                if (i == pac - 1) {	
-                    if (execvp(pav[0], pav) < 0) {
+					break;
+				}
+				if (i == pac - 1) {	
+					if (execvp(pav[0], pav) < 0) {
 						return -1;
 					}
-                    break;
-                }
-            }
+					break;
+				}
+			}
 		}
 		close(pfd[0]);close(pfd[1]);
 		if (bg > 0) {
@@ -307,29 +329,30 @@ int sh_launch(char* av[], int pNum)
 			close(pfd[0][0]);
 			close(pfd[0][1]);
 			pac = splitProc(av, pav, 0);
-            for (i = 0; i < pac; i++) {
-                if (*pav[i] == '>' || *pav[i] == '<') {
-                    fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+			for (i = 0; i < pac; i++) {
+				if (*pav[i] == '>' || *pav[i] == '<') {
 					if (*pav[i] == '>') {
+						fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
 						close(1);
 					} else if (*pav[i] == '<') {
+						fd = open(pav[i + 1], O_RDONLY|O_CREAT, S_IREAD | S_IWRITE);
 						close(0);
 					}
-                    dup(fd);
-                    close(fd);
-                    removeRedirect(pav, rav);
-                    if (execvp(rav[0], rav) < 0) {
-					   return -1;
+					dup(fd);
+					close(fd);
+					removeRedirect(pav, rav);
+					if (execvp(rav[0], rav) < 0) {
+						return -1;
 					}	   
-                    break;
-                }
-                if (i == pac - 1) {	
-                    if (execvp(pav[0], pav) < 0) {
+					break;
+				}
+				if (i == pac - 1) {	
+					if (execvp(pav[0], pav) < 0) {
 						return -1;
 					}
-                    break;
-                }
-            }
+					break;
+				}
+			}
 		}
 
 		//middle process
@@ -347,10 +370,11 @@ int sh_launch(char* av[], int pNum)
 				pac = splitProc(av, pav, i);
 				for (i = 0; i < pac; i++) {
 					if (*pav[i] == '>' || *pav[i] == '<') {
-						fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
 						if (*pav[i] == '>') {
+							fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
 							close(1);
 						} else if (*pav[i] == '<') {
+							fd = open(pav[i + 1], O_RDONLY|O_CREAT, S_IREAD | S_IWRITE);
 							close(0);
 						}
 						dup(fd);
@@ -380,29 +404,30 @@ int sh_launch(char* av[], int pNum)
 			close(pfd[i][0]);
 			close(pfd[i][1]);
 			pac = splitProc(av, pav, pNum - 1);
-            for (i = 0; i < pac; i++) {
-                if (*pav[i] == '>' || *pav[i] == '<') {
-                    fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+			for (i = 0; i < pac; i++) {
+				if (*pav[i] == '>' || *pav[i] == '<') {
 					if (*pav[i] == '>') {
+						fd = open(pav[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
 						close(1);
 					} else if (*pav[i] == '<') {
+						fd = open(pav[i + 1], O_RDONLY|O_CREAT, S_IREAD | S_IWRITE);
 						close(0);
 					}
-                    dup(fd);
-                    close(fd);
-                    removeRedirect(pav, rav);
-                    if (execvp(rav[0], rav) < 0) {
+					dup(fd);
+					close(fd);
+					removeRedirect(pav, rav);
+					if (execvp(rav[0], rav) < 0) {
 						return -1;
 					}
-                    break;
-                }
-                if (i == pac - 1) {	
-                    if (execvp(pav[0], pav) < 0) {
+					break;
+				}
+				if (i == pac - 1) {	
+					if (execvp(pav[0], pav) < 0) {
 						return -1;
 					}
-                    break;
-                }
-            }
+					break;
+				}
+			}
 		}
 
 		close(pfd[i][0]);
@@ -417,5 +442,5 @@ int sh_launch(char* av[], int pNum)
 
 void handler(int sig)
 {
-	fprintf(stderr, "signal detect\n");
+	//fprintf(stderr, "signal detect\n");
 }
